@@ -1,3 +1,4 @@
+#![cfg_attr(all(not(debug_assertions), not(test)), windows_subsystem = "windows")] // no console window behind the game
 mod assets;
 mod data;
 mod exe;

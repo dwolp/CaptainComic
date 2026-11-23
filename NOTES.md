@@ -166,3 +166,4 @@ Everything is optional and off by default (the faithful behaviour is untouched),
 
 ## Backups
 There is no git repository. `work/backups/src_*` holds copies of the sources; `src_2026-11-23` is the latest. Copy `captain-comic/src` there before risky bulk edits (main.rs was once truncated by a bad patch script and had to be rebuilt from the session transcript). The `src_pre_*` folders are the state just before each enhancement step and can be deleted when no longer wanted.
+- The release exe is a Windows-subsystem program (`windows_subsystem = "windows"` in main.rs, not for debug builds or tests), so no console window opens behind the game; `play.bat` starts it with `start` so its own window closes too.

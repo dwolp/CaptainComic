@@ -7,4 +7,4 @@ if not exist CaptainComic.exe (
   popd
   copy /y captain-comic\target\release\captain-comic.exe CaptainComic.exe
 )
-CaptainComic.exe
+start "" CaptainComic.exe
