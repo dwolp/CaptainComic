@@ -32,6 +32,8 @@ pub struct Settings {
     pub weather: Weather,
     /// No window frame: the world fills the window and the score, bars and lives are drawn over it.
     pub immersive: bool,
+    /// Ray-traced lighting (prototype): dark levels are lit by their torches, fireballs and Comic's lantern.
+    pub lighting: bool,
     /// Size of the immersive HUD: 0 small, 1 medium, 2 large.
     pub hud_size: u8,
     /// Controller rumble when Comic is hurt or dies.
@@ -43,10 +45,11 @@ pub struct Settings {
     /// The cheats are saved with the other settings.
     pub cheat_fire: bool,
     pub cheat_health: bool,
+    pub cheat_items: bool,
 }
 
 impl Default for Settings {
-    fn default() -> Settings { Settings { smooth: false, scaling: Scaling::Fit, fullscreen: true, hints: false, widescreen: false, crt: false, effects: false, weather: Weather::Off, immersive: false, hud_size: 1, rumble: false, volume: 5, pad: crate::pad::DEFAULT_MAP, cheat_fire: false, cheat_health: false } }
+    fn default() -> Settings { Settings { smooth: false, scaling: Scaling::Fit, fullscreen: true, hints: false, widescreen: false, crt: false, effects: false, weather: Weather::Off, immersive: false, lighting: false, hud_size: 1, rumble: false, volume: 5, pad: crate::pad::DEFAULT_MAP, cheat_fire: false, cheat_health: false, cheat_items: false } }
 }
 
 impl Settings {
@@ -79,10 +82,12 @@ impl Settings {
                 "effects" => s.effects = b,
                 "weather" => s.weather = if v == "rain" { Weather::Rain } else { Weather::Off },
                 "immersive" => s.immersive = b,
+                "lighting" => s.lighting = b,
                 "hud" => s.hud_size = v.parse::<u8>().map_or(1, |x| x.min(2)),
                 "rumble" => s.rumble = b,
                 "cheat_fire" => s.cheat_fire = b,
                 "cheat_health" => s.cheat_health = b,
+                "cheat_items" => s.cheat_items = b,
                 "volume" => s.volume = v.parse::<u8>().map_or(5, |x| x.min(10)),
                 "pad_jump" | "pad_fire" | "pad_open" | "pad_teleport" => {
                     let i = ["pad_jump", "pad_fire", "pad_open", "pad_teleport"].iter().position(|n| *n == k).unwrap();
@@ -96,9 +101,9 @@ impl Settings {
 
     pub fn to_text(&self) -> String {
         let on = |b: bool| if b { 1 } else { 0 };
-        format!("smooth={}\nscaling={}\nfullscreen={}\nhints={}\nwidescreen={}\ncrt={}\neffects={}\nweather={}\nimmersive={}\nhud={}\nrumble={}\ncheat_fire={}\ncheat_health={}\nvolume={}\npad_jump={}\npad_fire={}\npad_open={}\npad_teleport={}\n", on(self.smooth),
+        format!("smooth={}\nscaling={}\nfullscreen={}\nhints={}\nwidescreen={}\ncrt={}\neffects={}\nweather={}\nimmersive={}\nlighting={}\nhud={}\nrumble={}\ncheat_fire={}\ncheat_health={}\ncheat_items={}\nvolume={}\npad_jump={}\npad_fire={}\npad_open={}\npad_teleport={}\n", on(self.smooth),
             if self.scaling == Scaling::Fit { "fit" } else { "integer" }, on(self.fullscreen), on(self.hints), on(self.widescreen), on(self.crt),
-            on(self.effects), match self.weather { Weather::Off => "off", Weather::Rain => "rain" }, on(self.immersive), self.hud_size, on(self.rumble), on(self.cheat_fire), on(self.cheat_health), self.volume, crate::pad::button_name(self.pad[0]), crate::pad::button_name(self.pad[1]), crate::pad::button_name(self.pad[2]), crate::pad::button_name(self.pad[3]))
+            on(self.effects), match self.weather { Weather::Off => "off", Weather::Rain => "rain" }, on(self.immersive), on(self.lighting), self.hud_size, on(self.rumble), on(self.cheat_fire), on(self.cheat_health), on(self.cheat_items), self.volume, crate::pad::button_name(self.pad[0]), crate::pad::button_name(self.pad[1]), crate::pad::button_name(self.pad[2]), crate::pad::button_name(self.pad[3]))
     }
 
     pub fn load() -> Settings { fs::read_to_string(Path::new(FILE)).map(|t| Settings::parse(&t)).unwrap_or_default() }
@@ -124,7 +129,7 @@ mod tests {
     fn defaults_are_faithful_and_round_trip() {
         let d = Settings::default();
         assert!(!d.smooth && !d.hints && !d.widescreen && !d.crt && !d.effects && d.fullscreen && d.scaling == Scaling::Fit);
-        let s = Settings { smooth: true, scaling: Scaling::Fit, fullscreen: true, hints: true, widescreen: true, crt: true, effects: true, weather: Weather::Rain, immersive: true, hud_size: 2, rumble: true, volume: 8, pad: [gilrs::Button::RightTrigger, gilrs::Button::South, gilrs::Button::East, gilrs::Button::LeftTrigger], cheat_fire: true, cheat_health: true };
+        let s = Settings { smooth: true, scaling: Scaling::Fit, fullscreen: true, hints: true, widescreen: true, crt: true, effects: true, weather: Weather::Rain, immersive: true, lighting: true, hud_size: 2, rumble: true, volume: 8, pad: [gilrs::Button::RightTrigger, gilrs::Button::South, gilrs::Button::East, gilrs::Button::LeftTrigger], cheat_fire: true, cheat_health: true, cheat_items: true };
         assert_eq!(Settings::parse(&s.to_text()), s);
         assert_eq!(Settings::parse("garbage\nsmooth=on\n"), Settings { smooth: true, ..d });
     }

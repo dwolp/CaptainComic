@@ -5,9 +5,9 @@ use crate::{input::{self, Bindings}, settings::{Scaling, Settings}};
 pub enum Nav { Up, Down, Left, Right, Ok, Back }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Row { Enhanced, Scaling, Aspect, Frame, HudSize, Fullscreen, Crt, Weather, Volume, CheatFire, CheatHealth, Keys, PadKeys, SaveGame, LoadGame, Restart, Quit }
+pub enum Row { Enhanced, Scaling, Aspect, Frame, HudSize, Fullscreen, Crt, Lighting, Weather, Volume, CheatFire, CheatHealth, CheatItems, Keys, PadKeys, SaveGame, LoadGame, Restart, Quit }
 
-pub const ROWS: [Row; 17] = [Row::Enhanced, Row::Scaling, Row::Aspect, Row::Frame, Row::HudSize, Row::Fullscreen, Row::Crt, Row::Weather, Row::Volume, Row::CheatFire, Row::CheatHealth, Row::Keys, Row::PadKeys, Row::SaveGame, Row::LoadGame, Row::Restart, Row::Quit];
+pub const ROWS: [Row; 19] = [Row::Enhanced, Row::Scaling, Row::Aspect, Row::Frame, Row::HudSize, Row::Fullscreen, Row::Crt, Row::Lighting, Row::Weather, Row::Volume, Row::CheatFire, Row::CheatHealth, Row::CheatItems, Row::Keys, Row::PadKeys, Row::SaveGame, Row::LoadGame, Row::Restart, Row::Quit];
 
 #[derive(Default)]
 pub struct Menu {
@@ -42,11 +42,13 @@ impl Menu {
                 }
                 Row::Weather => { cfg.weather = if cfg.weather == crate::settings::Weather::Off { crate::settings::Weather::Rain } else { crate::settings::Weather::Off }; Outcome::Changed }
                 Row::HudSize => { cfg.hud_size = match n { Nav::Left => cfg.hud_size.saturating_sub(1), Nav::Right => (cfg.hud_size + 1).min(2), _ => (cfg.hud_size + 1) % 3 }; Outcome::Changed }
+                Row::Lighting => { cfg.lighting = !cfg.lighting; Outcome::Changed }
                 Row::Frame => { cfg.immersive = !cfg.immersive; Outcome::Changed }
                 Row::Fullscreen => { cfg.fullscreen = !cfg.fullscreen; Outcome::Changed }
                 Row::Crt => { cfg.crt = !cfg.crt; Outcome::Changed }
                 Row::CheatFire => { cfg.cheat_fire = !cfg.cheat_fire; Outcome::Changed }
                 Row::CheatHealth => { cfg.cheat_health = !cfg.cheat_health; Outcome::Changed }
+                Row::CheatItems => { cfg.cheat_items = !cfg.cheat_items; Outcome::Changed }
                 Row::Restart => if n == Nav::Ok { if was_confirming { Outcome::Restart } else { self.confirm = true; Outcome::None } } else { Outcome::None },
                 Row::Quit => if n == Nav::Ok { if was_confirming { Outcome::Quit } else { self.confirm = true; Outcome::None } } else { Outcome::None },
                 Row::Keys => { if n == Nav::Ok { self.remap = Some(0); } Outcome::None }
@@ -121,6 +123,7 @@ impl Menu {
                 Row::Aspect => format!("Aspect ratio|{}", if cfg.widescreen { "16:9" } else { "4:3" }),
                 Row::Weather => format!("Weather|{}", match cfg.weather { crate::settings::Weather::Off => "Off", crate::settings::Weather::Rain => "Rain" }),
                 Row::HudSize => format!("HUD size|{}", ["Small", "Medium", "Large"][cfg.hud_size.min(2) as usize]),
+                Row::Lighting => format!("Ray-traced light|{}", onoff(cfg.lighting)),
                 Row::Frame => format!("Window frame|{}", if cfg.immersive { "Immersive" } else { "Classic" }),
                 Row::Fullscreen => format!("Fullscreen|{}", onoff(cfg.fullscreen)),
                 Row::Crt => format!("CRT filter|{}", onoff(cfg.crt)),
@@ -129,6 +132,7 @@ impl Menu {
                 Row::Volume => format!("Volume|{}%", cfg.volume as u32 * 10),
                 Row::CheatFire => format!("Infinite fireballs|{}", onoff(cfg.cheat_fire)),
                 Row::CheatHealth => format!("Infinite health|{}", onoff(cfg.cheat_health)),
+                Row::CheatItems => format!("All items|{}", onoff(cfg.cheat_items)),
                 Row::Restart => if self.confirm && ROWS[self.sel] == Row::Restart { "Restart? Press Enter".to_string() } else { "Restart game".to_string() },
                 Row::Quit => if self.confirm && ROWS[self.sel] == Row::Quit { "Quit? Press Enter".to_string() } else { "Quit game".to_string() },
                 Row::SaveGame => "Save game".to_string(),

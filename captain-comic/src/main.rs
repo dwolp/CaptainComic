@@ -7,6 +7,7 @@ mod game;
 mod gamefiles;
 mod hiscore;
 mod input;
+mod light;
 mod menu;
 mod pad;
 mod settings;
@@ -614,6 +615,7 @@ async fn main() {
     let mut pad = pad::Pad::new();
     let mut toast: Option<(String, f64)> = None;
     let mut crt_rt: Option<((u32, u32), RenderTarget)> = None;
+    let lighting = light::Lighting::new();
     let crt_mat = load_material(ShaderSource::Glsl { vertex: CRT_VERTEX, fragment: CRT_FRAGMENT },
         MaterialParams { uniforms: vec![UniformDesc::new("TexW", UniformType::Float1), UniformDesc::new("Lines", UniformType::Float1)], ..Default::default() }).expect("crt shader");
     let mut esc_wait = false;
@@ -702,6 +704,7 @@ async fn main() {
                 game.new_game();
                 game.cheat_fire = cfg.cheat_fire;
                 game.cheat_health = cfg.cheat_health;
+                game.cheat_items = cfg.cheat_items;
                 snap = Snap::of(&game);
                 fx.reset(game.score);
                 audio.stop_all();
@@ -817,6 +820,7 @@ async fn main() {
                     snap = Snap::of(&game);
                     game.cheat_fire = cfg.cheat_fire;
                     game.cheat_health = cfg.cheat_health;
+                    game.cheat_items = cfg.cheat_items;
                     game.view_margin = view_extra;
                     game.tick(inp);
                     if cfg.rumble {
@@ -895,7 +899,7 @@ async fn main() {
                 let sm = (cfg.smooth && !frozen && pause.is_none()).then_some((&snap, a));
                 let mut frs = fr;
                 if cfg.effects { frs.x += fx.shake_off.0 * frs.s; frs.y += fx.shake_off.1 * frs.sy; }
-                draw_play(&game, &frs, &sprites, &gfx, pause.is_some(), sm, (cfg.hints && game.hint > 0) || env("CC_SHOWHINT").is_some(), cfg.effects.then_some(&fx), (cfg.smooth && !frozen).then_some(vis.as_slice()), imm, [0.5, 0.75, 1.0][cfg.hud_size.min(2) as usize]);
+                draw_play(&game, &frs, &sprites, &gfx, pause.is_some(), sm, (cfg.hints && game.hint > 0) || env("CC_SHOWHINT").is_some(), cfg.effects.then_some(&fx), (cfg.smooth && !frozen).then_some(vis.as_slice()), imm, [0.5, 0.75, 1.0][cfg.hud_size.min(2) as usize], cfg.lighting.then_some(&lighting));
             }
             Screen::HighScore => if let Some(h) = &hs { blit(&h.tex, &fr, 0.0, 0.0) },
         }
@@ -976,7 +980,7 @@ fn draw_menu(m: &menu::Menu, cfg: &settings::Settings, b: &input::Bindings, f: &
     let lines = m.lines(cfg, b);
     let keys = menu::Menu::key_lines(b, &cfg.pad);
     let rows = lines.len().max(keys.len()) as f32;
-    let (w, h) = (316.0 * f.s, (rows * 9.0 + 30.0) * f.s);
+    let (w, h) = (316.0 * f.s, (rows * 8.5 + 27.0) * f.s);
     let (x, y) = (f.x + (320.0 * f.s - w) / 2.0, f.y + (200.0 * f.sy - h) / 2.0);
     let yellow = Color::new(1.0, 1.0, 0.33, 1.0);
     let cyan = Color::new(0.33, 1.0, 1.0, 1.0);
@@ -988,7 +992,7 @@ fn draw_menu(m: &menu::Menu, cfg: &settings::Settings, b: &input::Bindings, f: &
     draw_line(split, y + 6.0 * f.s, split, y + h - 6.0 * f.s, 1.0, Color::new(0.5, 0.5, 0.2, 1.0));
     for (i, l) in lines.iter().enumerate() {
         let (label, value) = l.split_once('|').unwrap_or((l, ""));
-        let ly = y + (27.0 + i as f32 * 9.0) * f.s;
+        let ly = y + (24.0 + i as f32 * 8.5) * f.s;
         draw_text(label, x + 10.0 * f.s, ly, size * 0.75, WHITE);
         draw_text(value, x + 112.0 * f.s, ly, size * 0.75, cyan);
     }
@@ -996,11 +1000,49 @@ fn draw_menu(m: &menu::Menu, cfg: &settings::Settings, b: &input::Bindings, f: &
         let parts: Vec<&str> = l.split('|').collect();
         let (label, value, third) = (parts[0], parts.get(1).copied().unwrap_or(""), parts.get(2).copied().unwrap_or(""));
         if i == 0 { draw_text(label, split + 8.0 * f.s, y + 14.0 * f.s, size, yellow); draw_text(third, split + 100.0 * f.s, y + 14.0 * f.s, size * 0.75, yellow); continue; }
-        let ly = y + (27.0 + (i - 1) as f32 * 9.0) * f.s;
+        let ly = y + (24.0 + (i - 1) as f32 * 8.5) * f.s;
         draw_text(label, split + 8.0 * f.s, ly, size * 0.65, WHITE);
         draw_text(value, split + 50.0 * f.s, ly, size * 0.65, cyan);
         draw_text(third, split + 100.0 * f.s, ly, size * 0.65, cyan);
     }
+}
+
+/// The lights of a level for the ray-traced lighting: (how much stays visible in the dark, the lights).
+/// Every lit level has a light around Comic plus light-giving tiles: castle (only once the Lantern is found) and cave:
+/// torches; base: console lights; shed: the coloured blocks; computer: the glowing discs and panels. Fireballs light
+/// everything. The other levels (lake, forest, space) are outdoors and stay as they are.
+fn scene_lights(g: &Game, lvl: usize, map: &Map, px: f32, py: f32, cam: f32, ex: f32) -> Option<(f32, Vec<light::Light>)> {
+    // (ambient, Comic's light (radius, strength), [(tile ids, radius, strength)])
+    let (ambient, comic, sources): (f32, (f32, f32), &[(&[u8], f32, f32)]) = match lvl {
+        6 if g.items.lantern => (0.18, (125.0, 1.5), &[(&[60, 61], 64.0, 0.85)]),
+        4 => (0.20, (110.0, 1.4), &[(&[6], 68.0, 0.85)]),
+        3 => (0.72, (110.0, 1.0), &[(&[31, 34, 36, 37], 48.0, 0.7)]),
+        5 => (0.68, (110.0, 1.0), &[(&[24, 28, 29, 30, 31], 48.0, 0.7)]),
+        7 => (0.68, (110.0, 1.0), &[(&[41, 42, 43, 44, 45, 46, 47, 48, 49, 50], 56.0, 0.7), (&[2, 3, 4, 5], 48.0, 0.6)]),
+        _ => return None,
+    };
+    let (cx0, cy0) = (px * 8.0 + 8.0, py * 8.0 + 16.0);
+    let mut lights = vec![light::Light { x: cx0, y: cy0, radius: comic.0, strength: comic.1 }];
+    for fb in g.fireballs.iter().flatten() {
+        lights.push(light::Light { x: fb.x as f32 * 8.0 + 8.0, y: fb.y as f32 * 8.0 + 4.0, radius: 52.0, strength: 0.85 });
+    }
+    // light-giving tiles in view, nearest to Comic first (the shader-free grid takes at most MAX_LIGHTS)
+    let (left, right) = (cam * 8.0 - 80.0, cam * 8.0 + 192.0 + ex + 80.0);
+    let mut found: Vec<(f32, light::Light)> = vec![];
+    for c in 0..map.w {
+        let cx = c as f32 * 16.0 + 8.0;
+        if cx < left || cx > right { continue; }
+        for r in 0..map.h {
+            let id = map.cells[r * map.w + c];
+            if let Some(&(_, radius, strength)) = sources.iter().find(|(ids, _, _)| ids.contains(&id)) {
+                let cy = r as f32 * 16.0 + 8.0;
+                found.push((((cx - cx0).powi(2) + (cy - cy0).powi(2)), light::Light { x: cx, y: cy, radius, strength }));
+            }
+        }
+    }
+    found.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    for (_, l) in found { if lights.len() < light::MAX_LIGHTS { lights.push(l); } }
+    Some((ambient, lights))
 }
 
 /// Draw a HUD sprite with whole screen pixels per source pixel (`p` across, `py` down) at a screen position.
@@ -1040,7 +1082,7 @@ fn draw_overlay_hud(g: &Game, sp: &Sprites, f: &Frame, fx: Option<&fx::Fx>, size
     for (n, k) in icons.iter().enumerate() { blit_hud(&sp.items[fr][*k], x0 + p + n as f32 * 17.0 * p, y0, p, py); }
 }
 
-fn draw_play(g: &Game, f: &Frame, sp: &Sprites, gfx: &[LevelGfx], paused: bool, sm: Option<(&Snap, f32)>, hint: bool, fx: Option<&fx::Fx>, vis: Option<&[(f32, f32)]>, imm: bool, hud: f32) {
+fn draw_play(g: &Game, f: &Frame, sp: &Sprites, gfx: &[LevelGfx], paused: bool, sm: Option<(&Snap, f32)>, hint: bool, fx: Option<&fx::Fx>, vis: Option<&[(f32, f32)]>, imm: bool, hud: f32, lighting: Option<&light::Lighting>) {
     // Full-screen story text during the ending, faded in like the title.
     if let Phase::Ending(Ending::Screen(t)) = g.phase {
         blit(sp.fades[2].get(t as usize).unwrap_or(&sp.screens[2]), f, 0.0, 0.0);
@@ -1100,7 +1142,7 @@ fn draw_play(g: &Game, f: &Frame, sp: &Sprites, gfx: &[LevelGfx], paused: bool, 
     if let (Some(e), false) = (fx_ref, dark) {
         let vpx = (8.0, 8.0, 8.0 + 192.0 + f.ex, 8.0 + 160.0);
         // the lit castle is dim except around Comic (drawn first so the torch glows stay bright)
-        if lvl == 6 && g.items.lantern { e.darkness(f, 8.0 + (px - cam) * 8.0 + 8.0, 8.0 + py * 8.0 + 16.0, vpx); }
+        if lvl == 6 && g.items.lantern && lighting.is_none() { e.darkness(f, 8.0 + (px - cam) * 8.0 + 8.0, 8.0 + py * 8.0 + 16.0, vpx); }
         e.draw_ambient(f, lvl, map, cam, lg.spots.as_deref());
         e.draw_mist(f, lvl, map, cam);
         e.draw_weather(f, lvl);
@@ -1226,6 +1268,12 @@ fn draw_play(g: &Game, f: &Frame, sp: &Sprites, gfx: &[LevelGfx], paused: bool, 
         let s = tp.step as usize;
         if s != 5 { blit_unit(&sp.puff[s.min(4)], f, tp.orig.1 as f32, tp.orig.0 as f32, cam); }
         if s >= 1 { blit_unit(&sp.puff[(s - 1).min(4)], f, tp.dest.1 as f32, tp.dest.0 as f32, cam); }
+    }
+    // ray-traced lighting (prototype): the lit castle and the cave
+    if let Some(lt) = lighting {
+        if let Some((ambient, lights)) = scene_lights(g, lvl, map, px, py, cam, f.ex) {
+            lt.draw(f, (lvl, stg), map, (8.0, 8.0, 192.0 + f.ex, 160.0), cam * 8.0, ambient, &lights);
+        }
     }
     if let Some(e) = fx_ref {
         e.draw_particles(f, cam);

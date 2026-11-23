@@ -323,6 +323,8 @@ pub struct Game {
     /// Enhancement cheats (set by the host from the settings menu).
     pub cheat_fire: bool,
     pub cheat_health: bool,
+    /// Cheat: carry every item (turning it off keeps what was given).
+    pub cheat_items: bool,
     /// Counts respawns / stage jumps, so the host does not smooth a movement across them.
     pub resets: u32,
     /// Widescreen enhancement: fireballs may fly this many units beyond the original 24-unit window on each side.
@@ -338,7 +340,7 @@ impl Game {
             collected: Default::default(), treasure_flags: [false; 3], enemies: vec![], fireballs: [None; 5], max_fireballs: 0,
             hp: 0, lives: 4, score: 0, score_hundreds: 0, meter: 0, recharge: 2, refill: 6, treasures: 0,
             spawn: (12, 14), resp_timer: 0x14, spawn_off: 0x16, spawned: false, tele: None, dying: None,
-            game_over: false, win_countdown: 0, won: false, ticks: 0, hint: 0, cheat_fire: false, cheat_health: false, resets: 0, view_margin: 0,
+            game_over: false, win_countdown: 0, won: false, ticks: 0, hint: 0, cheat_fire: false, cheat_health: false, cheat_items: false, resets: 0, view_margin: 0,
         };
         g.init_stage();
         snd!(g, Sound::Start);
@@ -496,6 +498,10 @@ impl Game {
         // (4, or 5 with the boots) between ticks, whatever else (e.g. a teleport animation) is going on
         if !self.player.air && !inp.jump { self.player.reload_jump(if self.items.boots { 5 } else { 4 }); }
         if self.cheat_health { self.hp = 6; }
+        if self.cheat_items {
+            self.items = Items { corkscrew: true, key: true, boots: true, lantern: true, wand: true };
+            self.max_fireballs = self.max_fireballs.max(5);
+        }
         if self.cheat_fire { self.meter = 12; }
         self.player.begin_tick();
         if self.refill > 0 {
