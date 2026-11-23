@@ -1,4 +1,4 @@
-# Captain Comic
+# Captain Comic Remastered
 
 A native Windows port of the 1988 DOS game *The Adventures of Captain Comic* (by Michael Denio), written in Rust with
 [macroquad](https://macroquad.rs). The game logic was reverse engineered from the original program and is checked
