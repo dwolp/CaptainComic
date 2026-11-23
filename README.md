@@ -5,6 +5,17 @@ A native Windows port of the 1988 DOS game *The Adventures of Captain Comic* (by
 against it with differential tests (see `NOTES.md`). By default it plays like the original; every enhancement is
 optional.
 
+## Screenshots
+
+| | |
+|---|---|
+| ![The game in its original look](docs/screenshots/1-classic.png) | ![Smooth motion, 16:9 and rain](docs/screenshots/2-enhanced.png) |
+| The default: exactly the original's look, pixels 1.2x tall as on a DOS monitor. | Enhanced: 16:9, smooth 60 fps motion, effects and optional rain. |
+| ![The Immersive window with ray-traced light](docs/screenshots/3-immersive.png) | ![The cave with ray-traced light](docs/screenshots/4-cave.png) |
+| Immersive window without the frame, the castle lit by the Lantern. | Ray-traced light in the cave. |
+| ![The computer level](docs/screenshots/5-computer.png) | ![The settings menu](docs/screenshots/6-menu.png) |
+| Data pulses along the circuit lines in the computer level. | The F1 settings menu, with keyboard and controller bindings. |
+
 **The original game is included**, unchanged, as `game/Adventures of Captain Comic, The (1988).zip`. Its author,
 Michael Denio, released it as shareware with these terms (from the `comic.doc` inside the zip): it "may be
 re-distributed" provided that 1. "the program and graphics (including world maps) may not be distributed in any
