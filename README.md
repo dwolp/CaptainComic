@@ -8,7 +8,7 @@ optional.
 **This repository contains no original game files.** You need your own copy of the game: put the original zip (for
 example `Adventures of Captain Comic, The (1988).zip`) or the unpacked folder that contains `comic.exe` in a folder
 named `game` next to the executable, or point the program at a folder or `.zip` on the command line. A zip is
-unpacked once next to itself. The original's licence does not allow redistributing it, so please do not add it here.
+unpacked once next to itself.
 
 ## Build and run
 
