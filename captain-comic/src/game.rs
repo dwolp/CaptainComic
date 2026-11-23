@@ -629,17 +629,32 @@ impl Game {
     }
 
     /// Fireballs that may be in flight at once (the unlimited-fireballs cheat allows all five).
+    /// How far the visible view reaches beyond the original 24-unit window on each side: `(left, right)`. In a wide view
+    /// (view_margin > 0) the view is centred on the window but cannot show anything left of the stage start or right of
+    /// its end, so next to the stage's ends it shifts and one side shows more than `view_margin`.
+    fn view_extra(&self) -> (i32, i32) {
+        let wu = self.view_margin;
+        if wu <= 0 { return (0, 0); }
+        let cam = self.player.cam;
+        let width = 24 + 2 * wu;
+        let map_units = self.maps[self.level_idx][self.stage_idx].w as i32 * 2;
+        let left = (cam - wu).clamp(0, (map_units - width).max(0));
+        (cam - left, left + width - (cam + 24))
+    }
+
     fn fire_slots(&self) -> usize { if self.cheat_fire { 5 } else { self.max_fireballs } }
 
     fn fireballs_tick(&mut self) {
         let cam = self.player.cam;
         let slots = self.fire_slots();
-        let margin = self.view_margin;
+        let (lm, rm) = self.view_extra();
         for slot in self.fireballs.iter_mut().take(slots) {
             let Some(mut f) = *slot else { continue };
             f.x += f.dx;
             let sx = f.x - cam;
-            if f.x < 0 || sx < -margin || sx > 0x16 + margin { *slot = None; continue; }
+            // the original culls a fireball at 22 units; a wider view reaches 24 + margin, so use all of it
+            let right = if self.view_margin > 0 { 0x18 + rm } else { 0x16 };
+            if f.x < 0 || sx < -lm || sx > right { *slot = None; continue; }
             if self.items.corkscrew {
                 f.ctr -= 1;
                 if f.ctr == 0 { f.y -= 1; f.ctr = 2; } else { f.y += 1; }
@@ -835,14 +850,18 @@ impl Game {
         let mut bl = st;
         if bl > 7 { bl -= 6; if bl == 7 { self.despawn(i); return; } }
         let sx = self.enemies[i].x - self.player.cam;
-        if !(0..=0x16).contains(&sx) { self.despawn(i); return; }
+        let (lm, rm) = self.view_extra();
+        if !(-lm..=0x16 + rm).contains(&sx) { self.despawn(i); return; }
         self.enemies[i].state += 1;
     }
 
     /// Distance/collision test, runs after movement (original 0x172b).
     fn enemy_contact(&mut self, i: usize) {
         let (ey, ex) = (self.enemies[i].y, self.enemies[i].x);
-        if (ex - self.player.x).abs() >= 0x1e { self.despawn(i); return; }
+        // the original drops enemies 30 units from Comic; in a wider view (view_margin > 0) the limit grows with it, so
+        // enemies do not vanish while still on screen
+        let (lm, rm) = self.view_extra();
+        if (ex - self.player.x).abs() >= 0x1e + lm.max(rm) { self.despawn(i); return; }
         let dy = ey - self.player.y;
         if (ex - self.player.x).abs() < 2 && (0..4).contains(&dy) {
             self.enemies[i].state = 8;
@@ -1209,6 +1228,35 @@ mod tests {
         let before = g.score;
         for _ in 0..6 { g.tick(Input::default()); }
         assert_eq!(g.score, before, "no bonus with the cheat");
+    }
+
+    #[test]
+    fn a_wider_view_keeps_enemies_and_fireballs_until_the_edge() {
+        let Some(mut g) = real_game() else { return };
+        while g.phase != Phase::Playing { g.tick(Input::default()); }
+        let (py, px) = (g.player.y, g.player.x);
+        // an enemy 40 units away is dropped in the original view, kept in an ultrawide one
+        for (margin, kept) in [(0, false), (17, true)] {
+            g.view_margin = margin;
+            g.enemies[0].state = 1;
+            g.enemies[0].y = py;
+            g.enemies[0].x = px + 40;
+            g.enemy_contact(0);
+            assert_eq!(g.enemies[0].state == 1, kept, "margin {margin}");
+        }
+    }
+
+    #[test]
+    fn the_wide_view_extra_follows_the_stage_ends() {
+        let Some(mut g) = real_game() else { return };
+        while g.phase != Phase::Playing { g.tick(Input::default()); }
+        g.view_margin = 17;
+        g.player.cam = 0;
+        assert_eq!(g.view_extra(), (0, 34), "at the stage start everything extra is on the right");
+        g.player.cam = 40;
+        assert_eq!(g.view_extra(), (17, 17), "in the middle it is symmetrical");
+        g.view_margin = 0;
+        assert_eq!(g.view_extra(), (0, 0), "faithful view");
     }
 
     #[test]
