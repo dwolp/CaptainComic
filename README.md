@@ -18,7 +18,7 @@ cargo build --release
 ```
 
 The result is a single executable (`captain-comic/target/release/captain-comic.exe`, static runtime). On Windows,
-`play.bat` builds it, copies it to `CaptainComic.exe` in the project folder and starts it. Settings, the save file,
+`play.bat` builds it, copies it to `CaptainComicRemastered.exe` in the project folder and starts it. Settings, the save file,
 key bindings and high scores are written next to the executable.
 
 ## Playing
@@ -32,7 +32,10 @@ A gamepad works too (d-pad or stick to move, A jump, X fire, B or d-pad down ope
   controller rumble and a hint at locked doors. Select on a pad toggles it.
 - Aspect ratio (4:3 or 16:9), an **Immersive** mode without the window frame, HUD size, fullscreen, scaling, an
   optional CRT filter, rain, audio volume.
-- Save and load game (also F5 / F9), key and controller remapping, infinite fireballs and health, restart, quit.
+- **Ray-traced light**: the castle (after you find the Lantern), the cave, the base, the shed and the computer level get
+  soft shadows from torches, glowing tiles, fireballs and Comic's own light.
+- Save and load game (also F5 / F9), key and controller remapping, cheats (infinite fireballs, infinite health, all
+  items), restart, quit.
 
 Everything is off by default, so the faithful original behaviour is what you get until you change something.
 

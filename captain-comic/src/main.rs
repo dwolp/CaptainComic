@@ -83,7 +83,7 @@ fn tex(img: &assets::Image) -> Texture2D {
 }
 
 fn window_conf() -> Conf {
-    Conf { window_title: "Captain Comic".into(), window_width: 960, window_height: 760, ..Default::default() }
+    Conf { window_title: "Captain Comic Remastered".into(), window_width: 960, window_height: 760, ..Default::default() }
 }
 
 struct Sprites {
