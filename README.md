@@ -42,3 +42,9 @@ from starting fullscreen).
 `NOTES.md` documents how the original works (map and collision rules, enemy behaviours, sound, level data) and how
 the port is organised. `cargo test --release` runs the unit tests; the tests that compare against the original
 program are skipped when the original files are not found at `../AdvCapCo`.
+
+## Licence
+
+The code in this repository is released under the [MIT licence](LICENSE). That covers only this port. *The
+Adventures of Captain Comic* itself, its graphics and its sound remain the property of their owners and are not part
+of this repository.
