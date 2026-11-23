@@ -5,7 +5,7 @@ A native Windows port of the 1988 DOS game *The Adventures of Captain Comic* (by
 against it with differential tests (see `NOTES.md`). By default it plays like the original; every enhancement is
 optional.
 
-## Screenshots
+## Screenshots 
 
 | | |
 |---|---|
