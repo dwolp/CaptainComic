@@ -34,8 +34,7 @@ A gamepad works too (d-pad or stick to move, A jump, X fire, B or d-pad down ope
   optional CRT filter, rain, volume.
 - Save and load game (also F5 / F9), key and controller remapping, infinite fireballs and health, restart, quit.
 
-Everything is off by default, so the faithful original behaviour is what you get until you change something (apart
-from starting fullscreen).
+Everything is off by default, so the faithful original behaviour is what you get until you change something.
 
 ## Notes
 
