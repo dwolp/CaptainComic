@@ -1,7 +1,8 @@
-# The original game and everything derived from it must never be published (its licence forbids redistribution
-# of the program or its graphics).
+# The original game's zip (game/) is included unchanged under the author's shareware terms, but nothing derived from it
+# may be published: no unpacked or modified copies, and nothing from work/.
 /AdvCapCo/
-/game/
+/game/extracted/
+/game/README.txt
 /*.zip
 /work/
 

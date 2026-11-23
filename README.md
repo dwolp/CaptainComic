@@ -5,10 +5,15 @@ A native Windows port of the 1988 DOS game *The Adventures of Captain Comic* (by
 against it with differential tests (see `NOTES.md`). By default it plays like the original; every enhancement is
 optional.
 
-**This repository contains no original game files.** You need your own copy of the game: put the original zip (for
-example `Adventures of Captain Comic, The (1988).zip`) or the unpacked folder that contains `comic.exe` in a folder
-named `game` next to the executable, or point the program at a folder or `.zip` on the command line. A zip is
-unpacked once next to itself.
+**The original game is included**, unchanged, as `game/Adventures of Captain Comic, The (1988).zip`. Its author,
+Michael Denio, released it as shareware with these terms (from the `comic.doc` inside the zip): it "may be
+re-distributed" provided that 1. "the program and graphics (including world maps) may not be distributed in any
+modified form" and 2. "no form of compensation is [to be] collected from the distribution of this program". So that
+file must stay exactly as it is and this project must stay free. The game remains the property of its author; the MIT
+licence below covers only the code of this port.
+
+Keep the zip (or the unpacked folder that contains `comic.exe`) in a folder named `game` next to the executable, or
+point the program at a folder or `.zip` on the command line. A zip is unpacked once next to itself.
 
 ## Build and run
 
@@ -48,5 +53,5 @@ program are skipped when the original files are not found at `../AdvCapCo`.
 ## Licence
 
 The code in this repository is released under the [MIT licence](LICENSE). That covers only this port. *The
-Adventures of Captain Comic* itself, its graphics and its sound remain the property of their owners and are not part
-of this repository.
+Adventures of Captain Comic* itself, its graphics and its sound remain the property of their owner and are
+redistributed under the terms quoted above.
