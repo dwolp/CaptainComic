@@ -11,7 +11,7 @@ optional.
 |---|---|
 | ![The game in its original look](docs/screenshots/1-classic.png) | ![Smooth motion, 16:9 and rain](docs/screenshots/2-enhanced.png) |
 | The default: exactly the original's look, pixels 1.2x tall as on a DOS monitor. | Enhanced: 16:9, smooth 60 fps motion, effects and optional rain. |
-| ![The Immersive window on the lake](docs/screenshots/3-immersive4.png) | ![The cave with ray-traced light](docs/screenshots/4-cave.png) |
+| ![The Immersive window on the lake](docs/screenshots/3-immersive5.png) | ![The cave with ray-traced light](docs/screenshots/4-cave.png) |
 | The Immersive window: no frame, the world fills the screen and the HUD sits over it. | Ray-traced light in the cave. |
 | ![The computer level](docs/screenshots/5-computer.png) | ![The settings menu](docs/screenshots/6-menu.png) |
 | Data pulses along the circuit lines in the computer level. | The F1 settings menu, with keyboard and controller bindings. |
