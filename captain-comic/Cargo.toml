@@ -1,0 +1,20 @@
+[package]
+name = "captain-comic"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "captain-comic"
+path = "src/main.rs"
+
+[[bin]]
+name = "trace"
+path = "src/trace.rs"
+
+[dependencies]
+zip = { version = "2", default-features = false, features = ["deflate"] }
+macroquad = { version = "0.4", features = ["audio"] }
+gilrs = "0.11.2"
+
+[profile.release]
+opt-level = 3

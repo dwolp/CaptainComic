@@ -1,0 +1,19 @@
+# The original game and everything derived from it must never be published (its licence forbids redistribution
+# of the program or its graphics).
+/AdvCapCo/
+/game/
+/*.zip
+/work/
+
+# Build output and local files
+/target/
+/captain-comic/target/
+/CaptainComic.exe
+/comic.cfg
+/comic.sav
+/COMIC.HGH
+/KEYS.DEF
+/captain-comic/comic.cfg
+/captain-comic/comic.sav
+/captain-comic/KEYS.DEF
+/captain-comic/COMIC.HGH
