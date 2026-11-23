@@ -31,7 +31,7 @@ A gamepad works too (d-pad or stick to move, A jump, X fire, B or d-pad down ope
 - **Enhanced** turns on smooth 60 fps motion, visual effects (particles, glow, ambient details in each level),
   controller rumble and a hint at locked doors. Select on a pad toggles it.
 - Aspect ratio (4:3 or 16:9), an **Immersive** mode without the window frame, HUD size, fullscreen, scaling, an
-  optional CRT filter, rain, volume.
+  optional CRT filter, rain, audio volume.
 - Save and load game (also F5 / F9), key and controller remapping, infinite fireballs and health, restart, quit.
 
 Everything is off by default, so the faithful original behaviour is what you get until you change something.
