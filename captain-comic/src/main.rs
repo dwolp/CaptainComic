@@ -410,7 +410,38 @@ enum Screen { Notice, Keys, Title(u32), Story(u32), Legend, Prepare(u32), Play, 
 /// Letters offered when entering a name with a controller.
 const PAD_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .-";
 
-struct HighScore { ts: hiscore::TextScreen, table: Vec<u8>, entry: Option<usize>, name: Vec<u8>, tex: Texture2D, cand: Option<usize> }
+/// One frame of input for the name entry, from the keyboard and the controller at the same time.
+#[derive(Default, Clone)]
+struct NameInput { chars: Vec<char>, backspace: bool, enter: bool, up: bool, down: bool, add: bool, del: bool, start: bool }
+
+impl NameInput {
+    /// Typed characters and keys, plus the controller: d-pad up/down picks a letter, A or right adds it, B or left
+    /// deletes, Start finishes. The arrow keys mirror the d-pad.
+    fn read(pd: &pad::Pressed) -> NameInput {
+        let mut chars = vec![];
+        while let Some(c) = get_char_pressed() { chars.push(c); }
+        NameInput {
+            chars,
+            backspace: is_key_pressed(KeyCode::Backspace),
+            enter: is_key_pressed(KeyCode::Enter) || is_key_pressed(KeyCode::KpEnter),
+            up: pd.up || is_key_pressed(KeyCode::Up),
+            down: pd.down || is_key_pressed(KeyCode::Down),
+            add: pd.ok || pd.right || is_key_pressed(KeyCode::Right),
+            del: pd.back || pd.left || is_key_pressed(KeyCode::Left),
+            start: pd.start,
+        }
+    }
+}
+
+struct HighScore {
+    ts: hiscore::TextScreen, table: Vec<u8>, entry: Option<usize>, name: Vec<u8>,
+    /// the letter being picked with the controller (an index into PAD_CHARS), shown at the cursor
+    cand: Option<usize>,
+    /// the picked letter was changed since the last add, so finishing includes it
+    pending: bool,
+    dirty: bool,
+    tex: Option<Texture2D>,
+}
 
 impl HighScore {
     fn new(bg: &assets::Image, font: Option<&hiscore::Font>, path: &std::path::Path, score: u32, pad_hint: bool) -> HighScore {
@@ -426,11 +457,17 @@ impl HighScore {
                 ts.cursor(14, 5); ts.print(font, b"Pad: up/down = letter, A = add$", 8);
                 ts.cursor(15, 5); ts.print(font, b"B = delete, Start = finish$", 8);
             }
+            ts.cursor(11, 5 + 17); // the name goes right after the prompt (printing the hint moved the cursor away)
         } else {
             ts.draw_table(font, &table);
         }
-        let tex = tex(&ts.img);
-        HighScore { ts, table, entry, name: vec![], tex, cand: None }
+        HighScore { ts, table, entry, name: vec![], cand: None, pending: false, dirty: true, tex: None }
+    }
+
+    /// The screen as a texture (rebuilt only after a change).
+    fn texture(&mut self) -> &Texture2D {
+        if self.dirty || self.tex.is_none() { self.tex = Some(tex(&self.ts.img)); self.dirty = false; }
+        self.tex.as_ref().unwrap()
     }
 
     /// Show (or, with `None`, erase) the letter being picked at the cursor without moving the cursor.
@@ -441,57 +478,48 @@ impl HighScore {
     }
 
     /// DOS buffered input (INT 21h AH=0Ah, 12 characters) echoed in grey; Enter stores the name, saves the file and
-    /// shows the table. With a controller the name is built letter by letter (d-pad up/down picks, A adds, B deletes,
-    /// Start finishes). Returns true once the table is up.
-    fn input(&mut self, font: Option<&hiscore::Font>, path: &std::path::Path, pd: &pad::Pressed) -> bool {
+    /// shows the table. The keyboard and the controller work at the same time and on the same name: typed letters are
+    /// added as they come, the controller picks a letter (shown in yellow at the cursor) and adds it. Every change goes
+    /// through here in a fixed order and the picked letter is erased before and redrawn after, so mixing the two never
+    /// leaves a stray letter on the screen. Returns true once the table is up.
+    fn input(&mut self, font: Option<&hiscore::Font>, path: &std::path::Path, ev: &NameInput) -> bool {
         let Some(i) = self.entry else { return true };
-        let mut dirty = false;
-        let finish = is_key_pressed(KeyCode::Enter) || is_key_pressed(KeyCode::KpEnter) || pd.start;
-        while let Some(c) = get_char_pressed() {
+        self.preview(font, None); // take the picked letter off the screen while the name changes
+        // 1. typed characters
+        for &c in &ev.chars {
             if (' '..='~').contains(&c) && self.name.len() < hiscore::NAME_MAX {
-                self.name.push(c as u8); self.ts.teletype(font, c as u8, 7); self.cand = None; dirty = true;
+                self.name.push(c as u8); self.ts.teletype(font, c as u8, 7);
+                self.cand = None; self.pending = false;
             }
         }
-        let backspace = |s: &mut HighScore| {
-            if s.name.pop().is_some() {
-                s.ts.teletype(font, 8, 7); s.ts.teletype(font, b' ', 7); s.ts.teletype(font, 8, 7);
-                true
-            } else { false }
-        };
-        if is_key_pressed(KeyCode::Backspace) && backspace(self) { dirty = true; }
-        // controller: pick a letter
-        let step: i32 = if pd.up { 1 } else if pd.down { -1 } else { 0 };
+        // 2. deleting (keyboard Backspace, pad B / left)
+        if ev.backspace || ev.del {
+            if self.name.pop().is_some() { self.ts.teletype(font, 8, 7); self.ts.teletype(font, b' ', 7); self.ts.teletype(font, 8, 7); }
+        }
+        // 3. picking a letter
+        let step: i32 = if ev.up { 1 } else if ev.down { -1 } else { 0 };
         if step != 0 && self.name.len() < hiscore::NAME_MAX {
             let n = PAD_CHARS.len() as i32;
-            self.cand = Some(self.cand.map_or(0, |c| (c as i32 + step).rem_euclid(n) as usize));
-            self.preview(font, self.cand);
-            dirty = true;
+            self.cand = Some(self.cand.map_or(if step > 0 { 0 } else { n as usize - 1 }, |c| (c as i32 + step).rem_euclid(n) as usize));
+            self.pending = true;
         }
-        if (pd.ok || pd.right) && self.name.len() < hiscore::NAME_MAX {
-            if let Some(c) = self.cand {
-                self.name.push(PAD_CHARS[c]); self.ts.teletype(font, PAD_CHARS[c], 7);
-                self.preview(font, Some(c)); // the next letter starts where this one was
-                dirty = true;
-            }
+        // 4. adding the picked letter; the same letter stays up for the next position
+        if ev.add && self.name.len() < hiscore::NAME_MAX {
+            if let Some(c) = self.cand { self.name.push(PAD_CHARS[c]); self.ts.teletype(font, PAD_CHARS[c], 7); self.pending = false; }
         }
-        if pd.back || pd.left {
-            self.preview(font, None);
-            if backspace(self) { self.preview(font, self.cand); dirty = true; }
-        }
-        if finish {
-            // a letter that was picked but not added yet still counts
-            if let (Some(c), true) = (self.cand, self.name.len() < hiscore::NAME_MAX) {
-                if pd.start { self.name.push(PAD_CHARS[c]); }
-            }
+        // 5. finishing: a picked letter that was not added yet still counts
+        if ev.enter || ev.start {
+            if let (Some(c), true, true) = (self.cand, self.pending, self.name.len() < hiscore::NAME_MAX) { self.name.push(PAD_CHARS[c]); }
             hiscore::set_name(&mut self.table, i, &self.name);
             let blank = [b' '; 30];
             for row in [10, 11, 14, 15] { self.ts.cursor(row, 5); self.ts.print(font, &blank, 1); }
             let _ = std::fs::write(path, &self.table);
             self.ts.draw_table(font, &self.table);
             self.entry = None;
-            dirty = true;
+        } else {
+            self.preview(font, self.cand);
         }
-        if dirty { self.tex = tex(&self.ts.img); }
+        self.dirty = true;
         false
     }
 }
@@ -834,7 +862,7 @@ async fn main() {
             Screen::HighScore => {
                 if let Some(h) = hs.as_mut() {
                     let typing = h.entry.is_some();
-                    let shown = h.input(bios_font.as_ref(), &hgh_path, &pd);
+                    let shown = h.input(bios_font.as_ref(), &hgh_path, &NameInput::read(&pd));
                     // after the table: any key ends the program, as the original does (0x22fb, then exit to DOS)
                     if shown && !typing && (last_key.map_or(false, |k| !is_modifier(k)) || pd.any) { return; }
                 }
@@ -901,7 +929,7 @@ async fn main() {
                 if cfg.effects { frs.x += fx.shake_off.0 * frs.s; frs.y += fx.shake_off.1 * frs.sy; }
                 draw_play(&game, &frs, &sprites, &gfx, pause.is_some(), sm, (cfg.hints && game.hint > 0) || env("CC_SHOWHINT").is_some(), cfg.effects.then_some(&fx), (cfg.smooth && !frozen).then_some(vis.as_slice()), imm, [0.5, 0.75, 1.0][cfg.hud_size.min(2) as usize], cfg.lighting.then_some(&lighting));
             }
-            Screen::HighScore => if let Some(h) = &hs { blit(&h.tex, &fr, 0.0, 0.0) },
+            Screen::HighScore => if let Some(h) = hs.as_mut() { blit(h.texture(), &fr, 0.0, 0.0) },
         }
         if use_crt {
             set_default_camera();
@@ -1204,10 +1232,15 @@ fn draw_play(g: &Game, f: &Frame, sp: &Sprites, gfx: &[LevelGfx], paused: bool, 
             if let Some(&(vx, vy)) = vis.and_then(|v| v.get(i)) { ex = vx; ey = vy; }
             else if let Some((sn, a)) = sm { if let Some(&(py0, px0)) = sn.enemies.get(i) { ex = mix(px0, e.x, a); ey = mix(py0, e.y, a); } }
             // the original draws an enemy only when its column is 0..=22 units from the camera's left edge
-            if wide { if !(-2.0..=42.0).contains(&(e.x as f32 - cam)) { continue; } } else if !(0..=0x16).contains(&(e.x - g.player.cam)) { continue; }
+            if wide { if !(-2.0..=24.0 + f.ex / 8.0 + 2.0).contains(&(e.x as f32 - cam)) { continue; } } else if !(0..=0x16).contains(&(e.x - g.player.cam)) { continue; }
             let slot = e.frame + e.face;
+            // State 7 lasts one tick between the end of the explosion and the enemy being removed. The original draws the
+            // live sprite then, so a shot enemy flashes back for a moment; with any enhancement on it stays hidden (an
+            // enemy that fell out of the bottom of the stage, at y 18, still shows).
+            let enhanced = fx_ref.is_some() || sm.is_some() || vis.is_some();
             let (show_enemy, boom) = match e.state {
-                1 | 7 => (true, None),
+                1 => (true, None),
+                7 => (!enhanced || e.y >= 0x12, None),
                 s => { let bl = if s > 7 { s - 6 } else { s }; (bl <= 4, Some((bl - 2) as usize)) }
             };
             if show_enemy {
@@ -1320,6 +1353,81 @@ mod tests {
     fn exe() -> Option<exe::Exe> {
         let p = std::path::Path::new("../AdvCapCo/comic.exe");
         p.exists().then(|| exe::Exe::load(p).unwrap())
+    }
+
+    fn entry_screen() -> (HighScore, std::path::PathBuf) {
+        let bg = assets::Image { w: 320, h: 200, rgba: [0, 0, 0, 255].repeat(320 * 200) };
+        let path = std::env::temp_dir().join(format!("comic_hgh_test_{}_{:?}.hgh", std::process::id(), std::thread::current().id()));
+        let _ = std::fs::remove_file(&path);
+        (HighScore::new(&bg, None, &path, 5, true), path)
+    }
+
+    fn typed(s: &str) -> NameInput { NameInput { chars: s.chars().collect(), ..Default::default() } }
+
+    #[test]
+    fn name_entry_takes_the_keyboard_and_the_controller_at_the_same_time() {
+        let (mut h, path) = entry_screen();
+        assert!(h.entry.is_some(), "a score of 5 gets a place in an empty table");
+        h.input(None, &path, &typed("Ab"));
+        h.input(None, &path, &NameInput { up: true, ..Default::default() });       // controller: picks A
+        h.input(None, &path, &NameInput { up: true, ..Default::default() });       // B
+        h.input(None, &path, &NameInput { add: true, ..Default::default() });      // adds B
+        assert_eq!(h.name, b"AbB");
+        h.input(None, &path, &NameInput { backspace: true, ..Default::default() }); // keyboard deletes the B
+        h.input(None, &path, &typed("c"));                                          // keyboard again
+        h.input(None, &path, &NameInput { del: true, ..Default::default() });       // controller deletes the c
+        assert_eq!(h.name, b"Ab");
+        h.input(None, &path, &NameInput { down: true, ..Default::default() });      // pick (wraps to the last letter, '-')
+        h.input(None, &path, &NameInput { start: true, ..Default::default() });     // Start finishes and counts the pick
+        assert_eq!(h.name, b"Ab-");
+        assert!(h.entry.is_none(), "the table is shown");
+        assert!(h.input(None, &path, &NameInput::default()), "and the screen reports it");
+        let saved = std::fs::read(&path).unwrap();
+        assert_eq!(&saved[..3], b"Ab-");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_letter_that_was_added_is_not_added_again_by_finishing() {
+        let (mut h, path) = entry_screen();
+        h.input(None, &path, &NameInput { up: true, ..Default::default() });
+        h.input(None, &path, &NameInput { add: true, ..Default::default() });
+        h.input(None, &path, &NameInput { enter: true, ..Default::default() });
+        assert_eq!(h.name, b"A");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn the_name_stops_at_twelve_characters_from_either_device() {
+        let (mut h, path) = entry_screen();
+        h.input(None, &path, &typed("abcdefghij"));
+        for _ in 0..4 {
+            h.input(None, &path, &NameInput { up: true, ..Default::default() });
+            h.input(None, &path, &NameInput { add: true, ..Default::default() });
+        }
+        h.input(None, &path, &typed("zzz"));
+        assert_eq!(h.name.len(), hiscore::NAME_MAX);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn no_stray_letter_is_left_on_the_screen_when_the_two_devices_mix() {
+        let Some(font) = hiscore::Font::load() else { return };
+        let (mut h, path) = entry_screen();
+        // the name starts at column 22 of row 11 (after "Enter Your Name: ")
+        let ink = |h: &HighScore, col: usize| -> bool {
+            (0..8).any(|y| (0..8).any(|x| { let o = ((11 * 8 + y) * h.ts.img.w + col * 8 + x) * 4; h.ts.img.rgba[o..o + 3] != [0, 0, 0] }))
+        };
+        h.input(Some(&font), &path, &NameInput { up: true, ..Default::default() });
+        assert!(ink(&h, 22), "the picked letter shows at the cursor");
+        h.input(Some(&font), &path, &typed("X"));
+        assert!(ink(&h, 22) && !ink(&h, 23), "a typed letter replaces it and nothing is left behind it");
+        h.input(Some(&font), &path, &NameInput { up: true, ..Default::default() });
+        assert!(ink(&h, 23), "the picked letter moves to the next cell");
+        h.input(Some(&font), &path, &NameInput { backspace: true, ..Default::default() });
+        assert!(!ink(&h, 22) || h.cand.is_some(), "after deleting, only the picked letter is shown");
+        assert!(!ink(&h, 23), "and none is left in the cell after it");
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

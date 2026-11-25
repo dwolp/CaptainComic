@@ -1260,6 +1260,17 @@ mod tests {
     }
 
     #[test]
+    fn a_shot_enemy_passes_through_state_7_for_one_tick_before_it_is_removed() {
+        let Some(mut g) = real_game() else { return };
+        while g.phase != Phase::Playing { g.tick(Input::default()); }
+        g.enemies[0].state = 2;
+        g.enemies[0].x = g.player.cam + 10;
+        let mut seen = vec![];
+        for _ in 0..8 { g.enemy_dying(0); seen.push(g.enemies[0].state); }
+        assert_eq!(&seen[..6], &[3, 4, 5, 6, 7, 0], "explosion frames, one tick in state 7, then gone: {seen:?}");
+    }
+
+    #[test]
     fn a_locked_door_shows_a_hint_only_without_the_key() {
         let Some(mut g) = real_game() else { return };
         let open = Input { open: true, ..Default::default() };
