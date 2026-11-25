@@ -170,3 +170,5 @@ There is no git repository. `work/backups/src_*` holds copies of the sources; `s
 - The release exe is a Windows-subsystem program (`windows_subsystem = "windows"` in main.rs, not for debug builds or tests), so no console window opens behind the game; `play.bat` starts it with `start` so its own window closes too.
 
 - **Enemy flash after a hit**: a shot enemy goes through state 7 for one tick between its last explosion frame and being removed, and the original draws the live sprite then (a one-tick flash). With any enhancement on (`enhanced` in `draw_play`) that sprite is not drawn unless the enemy fell out of the bottom (y >= 18); the faithful mode keeps the original behaviour.
+
+- **v1.1.4**: `Game::load_text` now clears `game_over`, `won` and `win_countdown`. Before, loading a save after a game over or the ending left `can_save()` false for the rest of the session ("Can't save right now" until the program was restarted). Tests: `loading_after_game_over_or_the_ending_allows_saving_again`, `saving_is_allowed_whenever_comic_is_just_playing`, `saving_is_never_blocked_for_long_during_random_play`.

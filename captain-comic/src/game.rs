@@ -1180,6 +1180,61 @@ mod tests {
     }
 
     #[test]
+    fn saving_is_allowed_whenever_comic_is_just_playing() {
+        let Some(mut g) = real_game() else { return };
+        g.new_game();
+        let mut refused = vec![];
+        for t in 0..200 {
+            g.tick(Input::default());
+            if !g.can_save() { refused.push((t, format!("{:?}", g.phase))); }
+        }
+        // only the opening animation may refuse; after it, a standing Comic can always save
+        assert!(refused.iter().all(|(t, _)| *t < 90), "{refused:?}");
+        g.goto_stage(4, 0, 12, 40, false);
+        for _ in 0..90 { g.tick(Input::default()); }
+        assert!(g.can_save(), "phase {:?}", g.phase);
+    }
+
+    #[test]
+    fn loading_after_game_over_or_the_ending_allows_saving_again() {
+        let Some(mut g) = real_game() else { return };
+        for _ in 0..100 { g.tick(Input::default()); }
+        let text = g.save_text();
+        g.game_over = true; g.phase = Phase::GameOver;
+        assert!(!g.can_save());
+        assert!(g.load_text(&text));
+        assert!(g.can_save(), "saving must work after loading a save over a game over");
+        g.won = true; g.win_countdown = 5; g.phase = Phase::Ending(Ending::BeamOut(0));
+        assert!(g.load_text(&text));
+        assert!(g.can_save());
+        assert_eq!(g.win_countdown, 0);
+    }
+
+    #[test]
+    fn saving_is_never_blocked_for_long_during_random_play() {
+        let Some(mut g) = real_game() else { return };
+        let mut seed = 12345u32;
+        let mut rnd = move || { seed = seed.wrapping_mul(1664525).wrapping_add(1013904223); (seed >> 16) as u32 };
+        for level in 0..8 {
+            g.new_game();
+            for _ in 0..100 { g.tick(Input::default()); }
+            g.warp_to_level(level);
+            g.cheat_health = true; g.cheat_items = true; g.cheat_fire = true;
+            let mut blocked = 0;
+            for t in 0..6000 {
+                // hold one random action set for a few ticks, like a player would
+                let r = rnd();
+                let inp = Input { left: r & 1 != 0, right: r & 2 != 0, jump: r & 4 != 0, fire: r & 8 != 0, open: r & 16 != 0, teleport: r % 53 == 0 };
+                for _ in 0..(1 + rnd() % 4) {
+                    g.tick(inp);
+                    blocked = if g.can_save() || g.game_over || g.won { 0 } else { blocked + 1 };
+                    assert!(blocked < 120, "level {level} tick {t}: saving blocked for {blocked} ticks: phase {:?} dying {:?} tele {:?}", g.phase, g.dying, g.tele.is_some());
+                }
+            }
+        }
+    }
+
+    #[test]
     fn save_and_load_restore_the_checkpoint() {
         let Some(mut g) = real_game() else { return };
         g.items.key = true; g.items.boots = true; g.max_fireballs = 3; g.score = 4242; g.hp = 4; g.lives = 2;
@@ -1435,6 +1490,10 @@ impl Game {
         self.items = Items { corkscrew: it[0], key: it[1], boots: it[2], lantern: it[3], wand: it[4] };
         self.collected = collected;
         self.dying = None;
+        // a save loaded after a game over or the ending starts a fresh run: nothing of the old one may linger
+        self.game_over = false;
+        self.won = false;
+        self.win_countdown = 0;
         self.phase = Phase::Playing;
         true
     }
